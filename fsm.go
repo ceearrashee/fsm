@@ -1,6 +1,7 @@
 package fsm
 
 import (
+	"context"
 	"reflect"
 	"sync"
 )
@@ -25,12 +26,12 @@ type EventTransition struct {
 type Events []EventTransition
 
 type fsm struct {
-	sync.RWMutex
 	column        string
 	transitions   map[eventKey]State
 	initialStates map[State][]string
 	guards        map[string][]Guard
 	callbacks     map[cKey]func(context.Context, *Event) error
+	instanceLocks sync.Map // map[interface{}]*sync.Mutex for per-instance locking
 }
 
 type eventKey struct {
@@ -77,8 +78,14 @@ func newFSM(column string, events []EventTransition) *fsm {
 	return f
 }
 
+// getOrCreateInstanceLock returns or creates a mutex for the given instance
+func (f *fsm) getOrCreateInstanceLock(s interface{}) *sync.Mutex {
+	mu, _ := f.instanceLocks.LoadOrStore(s, &sync.Mutex{})
+	return mu.(*sync.Mutex)
+}
+
 func (f *fsm) Fire(ctx context.Context, s interface{}, event string) error {
-if err := ctx.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 
@@ -103,7 +110,10 @@ if err := ctx.Err(); err != nil {
 		return InvalidTransitionError{event, state.String()}
 	}
 
-	f.Lock()
+	// Lock this specific instance to allow concurrent transitions on different instances
+	mu := f.getOrCreateInstanceLock(s)
+	mu.Lock()
+	defer mu.Unlock()
 
 	err = f.beforeEventCallbacks(ctx, e)
 	if err != nil {
@@ -116,8 +126,6 @@ if err := ctx.Err(); err != nil {
 	if err != nil {
 		return err
 	}
-
-	f.Unlock()
 
 	return nil
 }

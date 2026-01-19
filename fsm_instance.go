@@ -61,3 +61,15 @@ func (f *FSM) GetPermittedStates(ctx context.Context, s interface{}, options ...
 
 	return machine.GetPermittedStates(ctx, s, options...)
 }
+
+// Release removes the instance lock for the given object from memory.
+// This is optional and should be called when an instance is no longer needed
+// to prevent memory accumulation in long-running applications.
+func (f *FSM) Release(s interface{}) {
+	machine, ok := f.machines[reflect.TypeOf(s)]
+	if !ok {
+		return
+	}
+
+	machine.instanceLocks.Delete(s)
+}
