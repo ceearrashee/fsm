@@ -1,3 +1,3 @@
-module github.com/ssych/fsm
+module github.com/ceearrashee/fsm
 
-go 1.13
+go 1.25
