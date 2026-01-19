@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-type Guard func(*Event) (bool, error)
+type Guard func(context.Context, *Event) (bool, error)
 
 type Event struct {
 	Event       string
@@ -18,8 +18,8 @@ type EventTransition struct {
 	From   []State
 	To     State
 	Guards []Guard
-	After  func(*Event) error
-	Before func(*Event) error
+	After  func(context.Context, *Event) error
+	Before func(context.Context, *Event) error
 }
 
 type Events []EventTransition
@@ -30,7 +30,7 @@ type fsm struct {
 	transitions   map[eventKey]State
 	initialStates map[State][]string
 	guards        map[string][]Guard
-	callbacks     map[cKey]func(*Event) error
+	callbacks     map[cKey]func(context.Context, *Event) error
 }
 
 type eventKey struct {
@@ -49,7 +49,7 @@ func newFSM(column string, events []EventTransition) *fsm {
 	}
 	f.transitions = make(map[eventKey]State)
 	f.guards = make(map[string][]Guard)
-	f.callbacks = make(map[cKey]func(*Event) error)
+	f.callbacks = make(map[cKey]func(context.Context, *Event) error)
 	f.initialStates = make(map[State][]string)
 
 	for _, e := range events {
@@ -77,7 +77,11 @@ func newFSM(column string, events []EventTransition) *fsm {
 	return f
 }
 
-func (f *fsm) Fire(s interface{}, event string) error {
+func (f *fsm) Fire(ctx context.Context, s interface{}, event string) error {
+if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	state, err := f.getSourceState(s)
 	if err != nil {
 		return err
@@ -90,7 +94,7 @@ func (f *fsm) Fire(s interface{}, event string) error {
 
 	e := &Event{Event: event, Source: s, Destination: destination}
 
-	ok, err = f.guardEvent(e)
+	ok, err = f.guardEvent(ctx, e)
 	if err != nil {
 		return err
 	}
@@ -101,14 +105,14 @@ func (f *fsm) Fire(s interface{}, event string) error {
 
 	f.Lock()
 
-	err = f.beforeEventCallbacks(e)
+	err = f.beforeEventCallbacks(ctx, e)
 	if err != nil {
 		return err
 	}
 
 	state.SetString(string(destination))
 
-	err = f.afterEventCallbacks(e)
+	err = f.afterEventCallbacks(ctx, e)
 	if err != nil {
 		return err
 	}
@@ -118,7 +122,7 @@ func (f *fsm) Fire(s interface{}, event string) error {
 	return nil
 }
 
-func (f *fsm) MayFire(s interface{}, event string, options ...Option) (bool, error) {
+func (f *fsm) MayFire(ctx context.Context, s interface{}, event string, options ...Option) (bool, error) {
 	// Setup options.
 	args := &Options{}
 	for _, option := range options {
@@ -138,7 +142,7 @@ func (f *fsm) MayFire(s interface{}, event string, options ...Option) (bool, err
 	e := &Event{Event: event, Source: s, Destination: destination}
 
 	if !args.SkipGuards {
-		ok, err = f.guardEvent(e)
+		ok, err = f.guardEvent(ctx, e)
 		if err != nil {
 			return false, err
 		}
@@ -147,7 +151,7 @@ func (f *fsm) MayFire(s interface{}, event string, options ...Option) (bool, err
 	return ok, nil
 }
 
-func (f *fsm) GetPermittedEvents(s interface{}, options ...Option) ([]string, error) {
+func (f *fsm) GetPermittedEvents(ctx context.Context, s interface{}, options ...Option) ([]string, error) {
 	state, err := f.getSourceState(s)
 	if err != nil {
 		return nil, err
@@ -160,7 +164,7 @@ func (f *fsm) GetPermittedEvents(s interface{}, options ...Option) ([]string, er
 
 	permittedEvents := []string{}
 	for _, event := range events {
-		ok, err := f.MayFire(s, event, options...)
+		ok, err := f.MayFire(ctx, s, event, options...)
 		if err != nil {
 			return nil, err
 		}
@@ -173,7 +177,7 @@ func (f *fsm) GetPermittedEvents(s interface{}, options ...Option) ([]string, er
 	return permittedEvents, nil
 }
 
-func (f *fsm) GetPermittedStates(s interface{}, options ...Option) ([]State, error) {
+func (f *fsm) GetPermittedStates(ctx context.Context, s interface{}, options ...Option) ([]State, error) {
 	state, err := f.getSourceState(s)
 	if err != nil {
 		return nil, err
@@ -212,11 +216,11 @@ func (f *fsm) getSourceState(s interface{}) (state reflect.Value, err error) {
 	return
 }
 
-func (f *fsm) guardEvent(e *Event) (bool, error) {
+func (f *fsm) guardEvent(ctx context.Context, e *Event) (bool, error) {
 	fns, ok := f.guards[e.Event]
 	if ok {
 		for _, fn := range fns {
-			if ok, err := fn(e); err != nil || !ok {
+			if ok, err := fn(ctx, e); err != nil || !ok {
 				return false, err
 			}
 		}
@@ -224,18 +228,18 @@ func (f *fsm) guardEvent(e *Event) (bool, error) {
 	return true, nil
 }
 
-func (f *fsm) afterEventCallbacks(e *Event) error {
+func (f *fsm) afterEventCallbacks(ctx context.Context, e *Event) error {
 	fn, ok := f.callbacks[cKey{event: e.Event, cType: "after"}]
 	if ok {
-		return fn(e)
+		return fn(ctx, e)
 	}
 	return nil
 }
 
-func (f *fsm) beforeEventCallbacks(e *Event) error {
+func (f *fsm) beforeEventCallbacks(ctx context.Context, e *Event) error {
 	fn, ok := f.callbacks[cKey{event: e.Event, cType: "before"}]
 	if ok {
-		return fn(e)
+		return fn(ctx, e)
 	}
 	return nil
 }

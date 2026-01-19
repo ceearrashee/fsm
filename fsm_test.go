@@ -1,6 +1,7 @@
 package fsm
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
@@ -9,11 +10,11 @@ type TestStruct struct {
 	State State
 }
 
-func IsTestStructValid(e *Event) (bool, error) {
+func IsTestStructValid(ctx context.Context, e *Event) (bool, error) {
 	return true, nil
 }
 
-func IsTestStructInvalid(e *Event) (bool, error) {
+func IsTestStructInvalid(ctx context.Context, e *Event) (bool, error) {
 	return false, nil
 }
 
@@ -33,7 +34,7 @@ func TestSetState(t *testing.T) {
 		t.Errorf("fsm.Register() error = %v", err)
 	}
 
-	err := fsm.Fire(testStruct, "make")
+	err := fsm.Fire(context.Background(), testStruct, "make")
 
 	if err != nil {
 		t.Errorf("error = %v", err)
@@ -60,7 +61,7 @@ func TestInvalidTransition(t *testing.T) {
 		t.Errorf("fsm.Register() error = %v", err)
 	}
 
-	err := fsm.Fire(testStruct, "make")
+	err := fsm.Fire(context.Background(), testStruct, "make")
 
 	if e, ok := err.(InvalidTransitionError); !ok && e.Event != "make" && e.State != "started" {
 		t.Error("expected 'InvalidTransitionError'")
@@ -82,7 +83,7 @@ func TestInvalidEvent(t *testing.T) {
 		t.Errorf("fsm.Register() error = %v", err)
 	}
 
-	err := fsm.Fire(testStruct, "some_event_name")
+	err := fsm.Fire(context.Background(), testStruct, "some_event_name")
 
 	if e, ok := err.(UnknownEventError); !ok && e.Event != "some_event_name" {
 		t.Error("expected 'UnknownEventError'")
@@ -103,7 +104,7 @@ func TestPermittedEvents(t *testing.T) {
 		t.Errorf("fsm.Register() error = %v", err)
 	}
 
-	permittedEvents, err := fsm.GetPermittedEvents(testStruct)
+	permittedEvents, err := fsm.GetPermittedEvents(context.Background(), testStruct)
 	if err != nil {
 		t.Errorf("fsm.GetPermittedEvents() error = %v", err)
 	}
@@ -127,7 +128,7 @@ func TestUnknownSrcState(t *testing.T) {
 		t.Errorf("fsm.Register() error = %v", err)
 	}
 
-	permittedEvents, err := fsm.GetPermittedEvents(testStruct)
+	permittedEvents, err := fsm.GetPermittedEvents(context.Background(), testStruct)
 	if err != nil {
 		t.Errorf("fsm.GetPermittedEvents() error = %v", err)
 	}
@@ -151,7 +152,7 @@ func TestPermittedEventsSkipGuards(t *testing.T) {
 		t.Errorf("fsm.Register() error = %v", err)
 	}
 
-	permittedEvents, err := fsm.GetPermittedEvents(testStruct, SkipGuard(true))
+	permittedEvents, err := fsm.GetPermittedEvents(context.Background(), testStruct, SkipGuard(true))
 	if err != nil {
 		t.Errorf("fsm.GetPermittedEvents() error = %v", err)
 	}
@@ -178,7 +179,7 @@ func TestPermittedStates(t *testing.T) {
 		t.Errorf("fsm.Register() error = %v", err)
 	}
 
-	permittedStates, err := fsm.GetPermittedStates(testStruct)
+	permittedStates, err := fsm.GetPermittedStates(context.Background(), testStruct)
 	if err != nil {
 		t.Errorf("fsm.GetPermittedStates() error = %v", err)
 	}

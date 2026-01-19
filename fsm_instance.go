@@ -1,6 +1,7 @@
 package fsm
 
 import (
+	"context"
 	"reflect"
 )
 
@@ -22,41 +23,41 @@ func (f *FSM) Register(tag reflect.Type, column string, events []EventTransition
 }
 
 // Fire func to fire event
-func (f *FSM) Fire(s interface{}, event string) error {
+func (f *FSM) Fire(ctx context.Context, s interface{}, event string) error {
 	machine, ok := f.machines[reflect.TypeOf(s)]
 	if !ok {
 		return InternalError{}
 	}
 
-	return machine.Fire(s, event)
+	return machine.Fire(ctx, s, event)
 }
 
 // MayFire func return false if event can`t may fire
-func (f *FSM) MayFire(s interface{}, event string, options ...Option) (bool, error) {
+func (f *FSM) MayFire(ctx context.Context, s interface{}, event string, options ...Option) (bool, error) {
 	machine, ok := f.machines[reflect.TypeOf(s)]
 	if !ok {
 		return false, InternalError{}
 	}
 
-	return machine.MayFire(s, event, options...)
+	return machine.MayFire(ctx, s, event, options...)
 }
 
 // GetPermittedEvents func to return all permitted events
-func (f *FSM) GetPermittedEvents(s interface{}, options ...Option) ([]string, error) {
+func (f *FSM) GetPermittedEvents(ctx context.Context, s interface{}, options ...Option) ([]string, error) {
 	machine, ok := f.machines[reflect.TypeOf(s)]
 	if !ok {
 		return nil, InternalError{}
 	}
 
-	return machine.GetPermittedEvents(s, options...)
+	return machine.GetPermittedEvents(ctx, s, options...)
 }
 
 // GetPermittedStates func to return all permitted states
-func (f *FSM) GetPermittedStates(s interface{}, options ...Option) ([]State, error) {
+func (f *FSM) GetPermittedStates(ctx context.Context, s interface{}, options ...Option) ([]State, error) {
 	machine, ok := f.machines[reflect.TypeOf(s)]
 	if !ok {
 		return nil, InternalError{}
 	}
 
-	return machine.GetPermittedStates(s, options...)
+	return machine.GetPermittedStates(ctx, s, options...)
 }
